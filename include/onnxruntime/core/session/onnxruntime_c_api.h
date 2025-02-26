@@ -715,6 +715,42 @@ typedef OrtCustomThreadHandle (*OrtCustomCreateThreadFn)(void* ort_custom_thread
  */
 typedef void (*OrtCustomJoinThreadFn)(OrtCustomThreadHandle ort_custom_thread_handle);
 
+typedef void (*OrtWorkCallbackFn)(uint64_t call_idx, void* work_data);
+
+typedef void (*OrtWorkDataCopyConstructorFn) (void* src_work_data, void* dst_work_data);
+
+typedef void (*OrtWorkCompleteCallbackFn) (void* work_data);
+
+/** \brief Custom work scheduling function
+ *
+ * \param[in] num_calls The number of times the work callback should be invoked.
+ *                      The callback is expected to be called concurrently in multiple threads.
+ * \param[in] work_callback Work callback to be called. Each invocation receives a unique call_idx parameter value in the range of [0, num_calls).
+ * \param[in] work_data Work callback data pointer.
+ * \param[in] work_data_copy_constructor_fn When OrtCustomScheduleWorkFn is called in asynchronous mode (i.e. when work_complete_callback is not null),
+ *                                          if this callback parameter is not null, then the underlying custom work scheduling implementation allocates
+ *                                          memory to hold work data (presumably using an efficient pool of reusable task objects) and calls
+ *                                          work_data_copy_constructor_fn to copy or move the data needed for subsequent work_callback invocation
+ *                                          from work_data (src_work_data parameter) into dst_work_data. After that, work_callback and work_complete_callback
+ *                                          receive dst_work_data instead of work_data value as the parameter.
+ *                                          This is needed to extend work_data lifetime until all async work callback invocations are complete.
+ *                                          The amount of memory allocated for dst_work_data is determined by OrtGetCustomScheduleWorkDataSize API function's
+ *                                          return value.
+ *                                          When OrtCustomScheduleWorkFn is called in synchronous mode (i.e. when work_complete_callback is null),
+ *                                          this parameter is ignored.
+ * \param[in] work_complete_callback If this parameter is null, then OrtCustomScheduleWorkFn operates in synchronous mode, blocking execution until all of the
+ *                                   num_calls work callback invocations are complete. The current thread may participate in calling the work callback.
+ *                                   If this parameter is not null, then OrtCustomScheduleWorkFn operates in asynchronous mode, returning immediately after
+ *                                   enqueuing the work in the underlying task queue.
+ *                                   In the asynchronous mode, work_data_copy_constructor_fn gets called (if it's non-null) before any work_callback
+ *                                   invocations, and work_complete_callback is expected to release any resources allocated by work_data_copy_constructor_fn,
+ *                                   acting as dst_work_data destructor.
+ * \param[in] ort_custom_schedule_work_fn_param Arbitrary parameter specified when OrtCustomScheduleWorkFn was set.
+ */
+typedef void (*OrtCustomScheduleWorkFn) (uint64_t num_calls, OrtWorkCallbackFn work_callback, void* work_data,
+  OrtWorkDataCopyConstructorFn work_data_copy_constructor_fn, OrtWorkCompleteCallbackFn work_complete_callback,
+  void* ort_custom_schedule_work_fn_param);
+
 typedef OrtStatus*(ORT_API_CALL* RegisterCustomOpsFn)(OrtSessionOptions* options, const OrtApiBase* api);
 
 /** \brief Callback function for RunAsync
@@ -4670,6 +4706,44 @@ struct OrtApi {
                   _In_reads_(num_external_initializer_files) char* const* external_initializer_file_buffer_array,
                   _In_reads_(num_external_initializer_files) const size_t* external_initializer_file_lengths,
                   size_t num_external_initializer_files);
+
+  /// @}
+  /// \name OrtCustomScheduleWorkFn
+  /// Custom thread pool support
+  /// @{
+
+  /** \brief Set custom work scheduling function for a custom thread pool
+   *
+   * \param[in] options Session options
+   * \param[in] ort_custom_schedule_work_fn Custom work scheduling function
+   * \param[in] ort_custom_schedule_work_fn_param Arbitrary parameter for ort_custom_schedule_work_fn
+   *
+   * \snippet{doc} snippets.dox OrtStatus Return Value
+   */
+  ORT_API2_STATUS(SessionOptionsSetCustomScheduleWorkFn, _Inout_ OrtSessionOptions* options,
+                  _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+
+  /** \brief Set custom work scheduling function for a custom thread pool
+   *
+   * \param[inout] tp_options
+   * \param[in] ort_custom_schedule_work_fn Custom work scheduling function
+   * \param[in] ort_custom_schedule_work_fn_param Arbitrary parameter for ort_custom_schedule_work_fn
+   *
+   * \snippet{doc} snippets.dox OrtStatus Return Value
+   */
+  ORT_API2_STATUS(SetGlobalCustomScheduleWorkFn, _Inout_ OrtThreadingOptions* tp_options,
+                  _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+
+  /** \brief Get the size and alignment for dst_work_data memory allocation in OrtCustomScheduleWorkFn.
+   *
+   * \param[out] work_data_size Work data size in bytes.
+   * \param[out] work_data_alignment Work data alignment in bytes. The alignment value must be a power of 2.
+   *
+   * \snippet{doc} snippets.dox OrtStatus Return Value
+   */
+  ORT_API2_STATUS(GetCustomScheduleWorkDataSize, _Out_ size_t* work_data_size, _Out_ size_t* work_data_alignment);
+
+  /// @}
 };
 
 /*

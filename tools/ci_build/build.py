@@ -1242,6 +1242,8 @@ def generate_build_tree(
     if args.use_full_protobuf or args.use_openvino or args.use_vitisai or args.gen_doc:
         cmake_args += ["-Donnxruntime_USE_FULL_PROTOBUF=ON", "-DProtobuf_USE_STATIC_LIBS=ON"]
 
+    cmake_args += ["-Dprotobuf_BUILD_SHARED_LIBS=OFF"]
+
     if args.use_tvm and args.llvm_path is not None:
         cmake_args += [f"-DLLVM_DIR={args.llvm_path}"]
 
@@ -1542,103 +1544,105 @@ def generate_build_tree(
                     cflags += ["/MP%d" % njobs]
         # Setup default values for cflags/cxxflags/ldflags.
         # The values set here are purely for security and compliance purposes. ONNX Runtime should work fine without these flags.
-        if (
-            (args.use_binskim_compliant_compile_flags or args.enable_address_sanitizer)
-            and not args.ios
-            and not args.android
-            and not args.build_wasm
-        ):
-            if is_windows():
-                # DLL initialization errors due to old conda msvcp140.dll dll are a result of the new MSVC compiler
-                # See https://developercommunity.visualstudio.com/t/Access-violation-with-std::mutex::lock-a/10664660#T-N10668856
-                # Remove this definition (_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-                # once the conda msvcp140.dll dll is updated.
-                cflags += ["/guard:cf", "/DWIN32", "/D_WINDOWS", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
-                if not args.use_gdk:
-                    # Target Windows 10
-                    cflags += [
-                        "/DWINAPI_FAMILY=100",
-                        "/DWINVER=0x0A00",
-                        "/D_WIN32_WINNT=0x0A00",
-                        "/DNTDDI_VERSION=0x0A000000",
-                    ]
-                # The "/profile" flag implies "/DEBUG:FULL /DEBUGTYPE:cv,fixup /OPT:REF /OPT:NOICF /INCREMENTAL:NO /FIXED:NO". We set it for satisfying a Microsoft internal compliance requirement. External users
-                # do not need to have it.
-                ldflags = ["/profile", "/DYNAMICBASE"]
-                # Address Sanitizer libs do not have a Qspectre version. So they two cannot be both enabled.
-                if not args.enable_address_sanitizer:
-                    # Also enable a special perf patch that was made for Intel Meteor Lake mobile CPUs
-                    cflags += ["/Qspectre", "/DONNXRUNTIME_ENABLE_INTEL_METEOR_LAKE_MOBILE_PLATFORM_PERF_PATCH"]
-                if config == "Release":
-                    cflags += ["/O2", "/Ob2", "/DNDEBUG"]
-                elif config == "RelWithDebInfo":
-                    cflags += ["/O2", "/Ob1", "/DNDEBUG"]
-                elif config == "Debug":
-                    cflags += ["/Ob0", "/Od", "/RTC1"]
-                elif config == "MinSizeRel":
-                    cflags += ["/O1", "/Ob1", "/DNDEBUG"]
-                if args.enable_address_sanitizer:
-                    cflags += ["/fsanitize=address"]
-                cxxflags = cflags.copy()
-                if args.use_cuda:
-                    # On Windows, nvcc passes /EHsc to the host compiler by default.
-                    cuda_compile_flags_str = ""
-                    for compile_flag in cflags:
-                        if compile_flag.startswith("/D"):
-                            cudaflags.append(compile_flag)
-                        else:
-                            cuda_compile_flags_str = cuda_compile_flags_str + " " + compile_flag
-                    if len(cuda_compile_flags_str) != 0:
-                        cudaflags.append(f'-Xcompiler="{cuda_compile_flags_str}"')
-            elif is_linux() or is_macOS():
-                if is_linux():
-                    ldflags = ["-Wl,-Bsymbolic-functions", "-Wl,-z,relro", "-Wl,-z,now", "-Wl,-z,noexecstack"]
-                else:
-                    ldflags = []
-                if config == "Release":
-                    cflags = [
-                        "-DNDEBUG",
-                        "-Wp,-D_FORTIFY_SOURCE=2",
-                        "-Wp,-D_GLIBCXX_ASSERTIONS",
-                        "-fstack-protector-strong",
-                        "-O3",
-                        "-pipe",
-                    ]
-                    if is_linux():
-                        ldflags += ["-Wl,--strip-all"]
-                elif config == "RelWithDebInfo":
-                    cflags = [
-                        "-DNDEBUG",
-                        "-Wp,-D_FORTIFY_SOURCE=2",
-                        "-Wp,-D_GLIBCXX_ASSERTIONS",
-                        "-fstack-protector-strong",
-                        "-O3",
-                        "-pipe",
-                        "-ggdb3",
-                    ]
-                elif config == "Debug":
-                    cflags = ["-ggdb3", "-O0"]
-                    if args.enable_address_sanitizer:
-                        cflags += ["-fsanitize=address"]
-                        ldflags += ["-fsanitize=address"]
-                elif config == "MinSizeRel":
-                    cflags = [
-                        "-DNDEBUG",
-                        "-Wp,-D_FORTIFY_SOURCE=2",
-                        "-Wp,-D_GLIBCXX_ASSERTIONS",
-                        "-fstack-protector-strong",
-                        "-Os",
-                        "-pipe",
-                        "-ggdb3",
-                    ]
-                if is_linux() and platform.machine() == "x86_64":
-                    # The following flags needs GCC 8 and newer
-                    cflags += ["-fstack-clash-protection"]
-                    if not args.rv64:
-                        cflags += ["-fcf-protection"]
-                cxxflags = cflags.copy()
-                if args.use_cuda:
-                    cudaflags = cflags.copy()
+#        cflags += ["/arch:AVX2", "/DWIN32", "/D_WINDOWS", "/DWINAPI_FAMILY=100", "/DWINVER=0x0A00", "/D_WIN32_WINNT=0x0A00", "/DNTDDI_VERSION=0x0A000000", "/Ob2", "/O2", "/Ot", "/Oi", "/DNDEBUG", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
+        cflags += ["/DWIN32", "/D_WINDOWS", "/DWINAPI_FAMILY=100", "/DWINVER=0x0A00", "/D_WIN32_WINNT=0x0A00", "/DNTDDI_VERSION=0x0A000000", "/O2", "/Ob1", "/DNDEBUG", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
+#        if (
+#            (args.use_binskim_compliant_compile_flags or args.enable_address_sanitizer)
+#            and not args.ios
+#            and not args.android
+#            and not args.build_wasm
+#        ):
+#            if is_windows():
+#                # DLL initialization errors due to old conda msvcp140.dll dll are a result of the new MSVC compiler
+#                # See https://developercommunity.visualstudio.com/t/Access-violation-with-std::mutex::lock-a/10664660#T-N10668856
+#                # Remove this definition (_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+#                # once the conda msvcp140.dll dll is updated.
+#                cflags += ["/guard:cf", "/DWIN32", "/D_WINDOWS", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
+#                if not args.use_gdk:
+#                    # Target Windows 10
+#                    cflags += [
+#                        "/DWINAPI_FAMILY=100",
+#                        "/DWINVER=0x0A00",
+#                        "/D_WIN32_WINNT=0x0A00",
+#                        "/DNTDDI_VERSION=0x0A000000",
+#                    ]
+#                # The "/profile" flag implies "/DEBUG:FULL /DEBUGTYPE:cv,fixup /OPT:REF /OPT:NOICF /INCREMENTAL:NO /FIXED:NO". We set it for satisfying a Microsoft internal compliance requirement. External users
+#                # do not need to have it.
+#                ldflags = ["/profile", "/DYNAMICBASE"]
+#                # Address Sanitizer libs do not have a Qspectre version. So they two cannot be both enabled.
+#                if not args.enable_address_sanitizer:
+#                    # Also enable a special perf patch that was made for Intel Meteor Lake mobile CPUs
+#                    cflags += ["/Qspectre", "/DONNXRUNTIME_ENABLE_INTEL_METEOR_LAKE_MOBILE_PLATFORM_PERF_PATCH"]
+#                if config == "Release":
+#                    cflags += ["/O2", "/Ob2", "/DNDEBUG"]
+#                elif config == "RelWithDebInfo":
+#                    cflags += ["/O2", "/Ob1", "/DNDEBUG"]
+#                elif config == "Debug":
+#                    cflags += ["/Ob0", "/Od", "/RTC1"]
+#                elif config == "MinSizeRel":
+#                    cflags += ["/O1", "/Ob1", "/DNDEBUG"]
+#                if args.enable_address_sanitizer:
+#                    cflags += ["/fsanitize=address"]
+#                cxxflags = cflags.copy()
+#                if args.use_cuda:
+#                    # On Windows, nvcc passes /EHsc to the host compiler by default.
+#                    cuda_compile_flags_str = ""
+#                    for compile_flag in cflags:
+#                        if compile_flag.startswith("/D"):
+#                            cudaflags.append(compile_flag)
+#                        else:
+#                            cuda_compile_flags_str = cuda_compile_flags_str + " " + compile_flag
+#                    if len(cuda_compile_flags_str) != 0:
+#                        cudaflags.append(f'-Xcompiler="{cuda_compile_flags_str}"')
+#            elif is_linux() or is_macOS():
+#                if is_linux():
+#                    ldflags = ["-Wl,-Bsymbolic-functions", "-Wl,-z,relro", "-Wl,-z,now", "-Wl,-z,noexecstack"]
+#                else:
+#                    ldflags = []
+#                if config == "Release":
+#                    cflags = [
+#                        "-DNDEBUG",
+#                        "-Wp,-D_FORTIFY_SOURCE=2",
+#                        "-Wp,-D_GLIBCXX_ASSERTIONS",
+#                        "-fstack-protector-strong",
+#                        "-O3",
+#                        "-pipe",
+#                    ]
+#                    if is_linux():
+#                        ldflags += ["-Wl,--strip-all"]
+#                elif config == "RelWithDebInfo":
+#                    cflags = [
+#                        "-DNDEBUG",
+#                        "-Wp,-D_FORTIFY_SOURCE=2",
+#                        "-Wp,-D_GLIBCXX_ASSERTIONS",
+#                        "-fstack-protector-strong",
+#                        "-O3",
+#                        "-pipe",
+#                        "-ggdb3",
+#                    ]
+#                elif config == "Debug":
+#                    cflags = ["-ggdb3", "-O0"]
+#                    if args.enable_address_sanitizer:
+#                        cflags += ["-fsanitize=address"]
+#                        ldflags += ["-fsanitize=address"]
+#                elif config == "MinSizeRel":
+#                    cflags = [
+#                        "-DNDEBUG",
+#                        "-Wp,-D_FORTIFY_SOURCE=2",
+#                        "-Wp,-D_GLIBCXX_ASSERTIONS",
+#                        "-fstack-protector-strong",
+#                        "-Os",
+#                        "-pipe",
+#                        "-ggdb3",
+#                    ]
+#                if is_linux() and platform.machine() == "x86_64":
+#                    # The following flags needs GCC 8 and newer
+#                    cflags += ["-fstack-clash-protection"]
+#                    if not args.rv64:
+#                        cflags += ["-fcf-protection"]
+#                cxxflags = cflags.copy()
+#                if args.use_cuda:
+#                    cudaflags = cflags.copy()
         if cxxflags is None and cflags is not None and len(cflags) != 0:
             cxxflags = cflags.copy()
         config_build_dir = get_config_build_dir(build_dir, config)

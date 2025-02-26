@@ -687,6 +687,10 @@ struct ThreadingOptions : detail::Base<OrtThreadingOptions> {
 
   /// \brief Wraps OrtApi::SetGlobalCustomJoinThreadFn
   ThreadingOptions& SetGlobalCustomJoinThreadFn(OrtCustomJoinThreadFn ort_custom_join_thread_fn);
+
+  /// \brief Wraps OrtApi::SetGlobalCustomScheduleWorkFn
+  ThreadingOptions& SetGlobalCustomScheduleWorkFn(OrtCustomScheduleWorkFn ort_custom_schedule_work_fn,
+                                                  void* ort_custom_schedule_work_fn_param);
 };
 
 /** \brief The Env (Environment)
@@ -897,6 +901,8 @@ struct SessionOptionsImpl : ConstSessionOptionsImpl<T> {
   SessionOptionsImpl& SetCustomCreateThreadFn(OrtCustomCreateThreadFn ort_custom_create_thread_fn);  ///< Wraps OrtApi::SessionOptionsSetCustomCreateThreadFn
   SessionOptionsImpl& SetCustomThreadCreationOptions(void* ort_custom_thread_creation_options);      ///< Wraps OrtApi::SessionOptionsSetCustomThreadCreationOptions
   SessionOptionsImpl& SetCustomJoinThreadFn(OrtCustomJoinThreadFn ort_custom_join_thread_fn);        ///< Wraps OrtApi::SessionOptionsSetCustomJoinThreadFn
+  SessionOptionsImpl& SetCustomScheduleWorkFn(OrtCustomScheduleWorkFn ort_custom_schedule_work_fn,
+                                              void* ort_custom_schedule_work_fn_param);              ///< Wraps OrtApi::SessionOptionsSetCustomScheduleWorkFn
 
   ///< Registers the custom operator from the specified shared library via OrtApi::RegisterCustomOpsLibrary_V2.
   ///< The custom operator configurations are optional. If provided, custom operator configs are set via

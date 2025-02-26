@@ -523,4 +523,10 @@ ORT_API_STATUS_IMPL(SessionOptionsAppendExecutionProvider_VitisAI, _In_ OrtSessi
 ORT_API_STATUS_IMPL(KernelContext_GetScratchBuffer, _In_ const OrtKernelContext* context, _In_ const OrtMemoryInfo* mem_info, _In_ size_t count_or_bytes, _Outptr_ void** out);
 
 ORT_API_STATUS_IMPL(KernelInfoGetAllocator, _In_ const OrtKernelInfo* info, _In_ OrtMemType mem_type, _Outptr_ OrtAllocator** out);
+
+ORT_API_STATUS_IMPL(SessionOptionsSetCustomScheduleWorkFn, _Inout_ OrtSessionOptions* options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+ORT_API_STATUS_IMPL(SetGlobalCustomScheduleWorkFn, _Inout_ OrtThreadingOptions* tp_options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+ORT_API_STATUS_IMPL(GetCustomScheduleWorkDataSize, _Out_ size_t* work_data_size, _Out_ size_t* work_data_alignment);
 }  // namespace OrtApis

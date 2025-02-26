@@ -477,6 +477,12 @@ inline ThreadingOptions& ThreadingOptions::SetGlobalCustomJoinThreadFn(OrtCustom
   return *this;
 }
 
+inline ThreadingOptions& ThreadingOptions::SetGlobalCustomScheduleWorkFn(OrtCustomScheduleWorkFn ort_custom_schedule_work_fn,
+                                                                         void* ort_custom_schedule_work_fn_param) {
+  ThrowOnError(GetApi().SetGlobalCustomScheduleWorkFn(p_, ort_custom_schedule_work_fn, ort_custom_schedule_work_fn_param));
+  return *this;
+}
+
 inline Env::Env(OrtLoggingLevel logging_level, _In_ const char* logid) {
   ThrowOnError(GetApi().CreateEnv(logging_level, logid, &p_));
   if (strcmp(logid, "onnxruntime-node") == 0) {
@@ -887,6 +893,13 @@ inline SessionOptionsImpl<T>& SessionOptionsImpl<T>::SetCustomThreadCreationOpti
 template <typename T>
 inline SessionOptionsImpl<T>& SessionOptionsImpl<T>::SetCustomJoinThreadFn(OrtCustomJoinThreadFn ort_custom_join_thread_fn) {
   ThrowOnError(GetApi().SessionOptionsSetCustomJoinThreadFn(this->p_, ort_custom_join_thread_fn));
+  return *this;
+}
+
+template <typename T>
+inline SessionOptionsImpl<T>& SessionOptionsImpl<T>::SetCustomScheduleWorkFn(OrtCustomScheduleWorkFn ort_custom_schedule_work_fn,
+                                                                             void* ort_custom_schedule_work_fn_param) {
+  ThrowOnError(GetApi().SessionOptionsSetCustomScheduleWorkFn(this->p_, ort_custom_schedule_work_fn, ort_custom_schedule_work_fn_param));
   return *this;
 }
 
