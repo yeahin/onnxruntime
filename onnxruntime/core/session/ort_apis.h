@@ -601,4 +601,10 @@ ORT_API(const OrtEpApi*, GetEpApi);
 
 ORT_API_STATUS_IMPL(GetTensorSizeInBytes, _In_ const OrtValue* ort_value, _Out_ size_t* size);
 
+
+ORT_API_STATUS_IMPL(SessionOptionsSetCustomScheduleWorkFn, _Inout_ OrtSessionOptions* options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+ORT_API_STATUS_IMPL(SetGlobalCustomScheduleWorkFn, _Inout_ OrtThreadingOptions* tp_options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
+ORT_API_STATUS_IMPL(GetCustomScheduleWorkDataSize, _Out_ size_t* work_data_size, _Out_ size_t* work_data_alignment);
 }  // namespace OrtApis

@@ -272,6 +272,10 @@ struct SessionOptions {
   bool has_explicit_ep_context_gen_options = false;
   EpContextModelGenerationOptions ep_context_gen_options = {};
   EpContextModelGenerationOptions GetEpContextGenerationOptions() const;
+
+  // custom function callback to schedule work on a custom thread pool
+  OrtCustomScheduleWorkFn custom_schedule_work_fn = nullptr;
+  void* custom_schedule_work_fn_param = nullptr;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const SessionOptions& session_options) {

@@ -370,6 +370,93 @@ class alignas(CACHE_LINE_BYTES) LoopCounter {
 #pragma warning(pop) /* Padding added in LoopCounterShard, LoopCounter */
 #endif
 
+class ThreadPool::CustomThreadPoolWrapper : public ExtendedThreadPoolInterface
+{
+public:
+  CustomThreadPoolWrapper(const ThreadOptions& thread_options, int num_threads_to_report)
+    : custom_schedule_work_fn_(thread_options.custom_schedule_work_fn)
+    , custom_schedule_work_fn_param_(thread_options.custom_schedule_work_fn_param)
+    , num_threads_to_report_(num_threads_to_report)
+  {}
+
+  void Schedule(std::function<void()> fn) override {
+    if (fn) {
+      custom_schedule_work_fn_(1, WorkCallback, &fn, WorkDataMoveConstructor, WorkCompleteCallback,
+                               custom_schedule_work_fn_param_);
+    }
+  }
+
+  virtual int NumThreads() const override {
+    return num_threads_to_report_;
+  }
+
+  int CurrentThreadId() const override {
+    return -1;
+  }
+
+  void StartParallelSection(ThreadPoolParallelSection& ps) override {
+    (void) ps;
+  }
+
+  void EndParallelSection(ThreadPoolParallelSection& ps) override {
+    (void) ps;
+  }
+
+  void RunInParallelSection(ThreadPoolParallelSection& ps,
+                            std::function<void(unsigned idx)> fn,
+                            unsigned n, std::ptrdiff_t block_size) override {
+    (void) ps, (void) block_size;
+    DoRunInParallel(fn, n);
+  }
+
+  void RunInParallel(std::function<void(unsigned idx)> fn,
+                     unsigned n, std::ptrdiff_t block_size) override {
+    (void) block_size;
+    DoRunInParallel(fn, n);
+  }
+
+  void StartProfiling() override
+  {}
+
+  std::string StopProfiling() override {
+    return std::string();
+  }
+
+private:
+  void DoRunInParallel(std::function<void(unsigned idx)>& fn, const unsigned n) {
+    if (fn) {
+      custom_schedule_work_fn_(n, ParallelWorkCallback, &fn, nullptr, nullptr,
+                               custom_schedule_work_fn_param_);
+    }
+  }
+
+  static void ParallelWorkCallback(uint64_t call_idx, void* work_data) {
+    std::function<void(unsigned)>& fn = *reinterpret_cast<std::function<void(unsigned)>*>(work_data);
+    fn((unsigned) call_idx);
+  }
+
+  static void WorkCallback(uint64_t call_idx, void* work_data) {
+    (void) call_idx;
+    std::function<void()>& fn = *reinterpret_cast<std::function<void()>*>(work_data);
+    fn();
+  }
+
+  static void WorkDataMoveConstructor(void* src_work_data, void* dst_work_data) {
+    std::function<void()>& src_fn = *reinterpret_cast<std::function<void()>*>(src_work_data);
+    new (dst_work_data) std::function<void()>(std::move(src_fn));
+  }
+
+  static void WorkCompleteCallback(void* work_data) {
+    using FnType = std::function<void()>;
+    FnType& fn = *reinterpret_cast<FnType*>(work_data);
+    fn.~FnType();
+  }
+
+  const OrtCustomScheduleWorkFn custom_schedule_work_fn_;
+  void* const custom_schedule_work_fn_param_;
+  const int num_threads_to_report_;
+};
+
 ThreadPool::ThreadPool(Env* env,
                        const ThreadOptions& thread_options,
                        const NAME_CHAR_TYPE* name,
@@ -390,13 +477,18 @@ ThreadPool::ThreadPool(Env* env,
       assert(thread_options_.affinities.size() >= size_t(threads_to_create));
     }
 
-    extended_eigen_threadpool_ =
+    if (thread_options_.custom_schedule_work_fn) {
+      custom_threadpool_wrapper_ = std::make_unique<CustomThreadPoolWrapper>(thread_options_, threads_to_create);
+      underlying_threadpool_ = custom_threadpool_wrapper_.get();
+    } else {
+      extended_eigen_threadpool_ =
         std::make_unique<ThreadPoolTempl<Env> >(name,
                                                 threads_to_create,
                                                 low_latency_hint,
                                                 *env,
                                                 thread_options_);
-    underlying_threadpool_ = extended_eigen_threadpool_.get();
+      underlying_threadpool_ = extended_eigen_threadpool_.get();
+    }
   }
 }
 
@@ -536,6 +628,10 @@ bool ThreadPool::ShouldParallelizeLoop(const std::ptrdiff_t num_iterations,
   // Do not parallelize trivial loops, with only a single block of work
   if (block_size <= 0 || num_iterations <= block_size) {
     return false;
+  }
+
+  if (custom_threadpool_wrapper_) {
+    return true;
   }
 
   // Do not parallelize loops with only a single thread available.  If the
