@@ -184,6 +184,10 @@ struct SessionOptions {
   // User specified logging func and param
   OrtLoggingFunction user_logging_function = nullptr;
   void* user_logging_param = nullptr;
+
+  // custom function callback to schedule work on a custom thread pool
+  OrtCustomScheduleWorkFn custom_schedule_work_fn = nullptr;
+  void* custom_schedule_work_fn_param = nullptr;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const SessionOptions& session_options) {

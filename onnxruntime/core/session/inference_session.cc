@@ -512,6 +512,8 @@ void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
         to.custom_create_thread_fn = session_options_.custom_create_thread_fn;
         to.custom_thread_creation_options = session_options.custom_thread_creation_options;
         to.custom_join_thread_fn = session_options_.custom_join_thread_fn;
+        to.custom_schedule_work_fn = session_options.custom_schedule_work_fn;
+        to.custom_schedule_work_fn_param = session_options.custom_schedule_work_fn_param;
         if (session_options_.config_options.TryGetConfigEntry(kOrtSessionOptionsConfigIntraOpThreadAffinities, to.affinity_str)) {
           ORT_ENFORCE(!to.affinity_str.empty(), "Affinity string must not be empty");
         }
@@ -548,6 +550,8 @@ void InferenceSession::ConstructorCommon(const SessionOptions& session_options,
         to.custom_create_thread_fn = session_options_.custom_create_thread_fn;
         to.custom_thread_creation_options = session_options.custom_thread_creation_options;
         to.custom_join_thread_fn = session_options_.custom_join_thread_fn;
+        to.custom_schedule_work_fn = session_options.custom_schedule_work_fn;
+        to.custom_schedule_work_fn_param = session_options.custom_schedule_work_fn_param;
 
         if (to.custom_create_thread_fn) {
           ORT_ENFORCE(to.custom_join_thread_fn, "custom join thread function not set for inter op thread pool");

@@ -2337,6 +2337,15 @@ ORT_API_STATUS_IMPL(OrtApis::SessionOptionsSetCustomJoinThreadFn, _Inout_ OrtSes
   API_IMPL_END
 }
 
+ORT_API_STATUS_IMPL(OrtApis::SessionOptionsSetCustomScheduleWorkFn, _Inout_ OrtSessionOptions* options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param) {
+  API_IMPL_BEGIN
+  options->value.custom_schedule_work_fn = ort_custom_schedule_work_fn;
+  options->value.custom_schedule_work_fn_param = ort_custom_schedule_work_fn_param;
+  return nullptr;
+  API_IMPL_END
+}
+
 ORT_API(const OrtTrainingApi*, OrtApis::GetTrainingApi, uint32_t version) {
 #ifdef ENABLE_TRAINING_APIS
   if (version >= 13 && version <= ORT_API_VERSION)
@@ -2730,6 +2739,10 @@ static constexpr OrtApi ort_api_1_to_20 = {
     &OrtApis::KernelInfoGetAllocator,
     &OrtApis::AddExternalInitializersFromFilesInMemory,
     // End of Version 18 - DO NOT MODIFY ABOVE (see above text for more information)
+
+    &OrtApis::SessionOptionsSetCustomScheduleWorkFn,
+    &OrtApis::SetGlobalCustomScheduleWorkFn,
+    &OrtApis::GetCustomScheduleWorkDataSize,
 };
 
 // OrtApiBase can never change as there is no way to know what version of OrtApiBase is returned by OrtGetApiBase.

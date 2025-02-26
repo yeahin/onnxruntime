@@ -4,6 +4,7 @@
 #include "core/util/thread_utils.h"
 
 #include <algorithm>
+#include <functional>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -27,6 +28,8 @@ std::ostream& operator<<(std::ostream& os, const OrtThreadPoolParams& params) {
   // os << " custom_create_thread_fn: " << (params.custom_create_thread_fn ? "set" : "nullptr");
   // os << " custom_thread_creation_options: " << (params.custom_thread_creation_options ? "set" : "nullptr");
   // os << " custom_join_thread_fn: " << (params.custom_join_thread_fn ? "set" : "nullptr");
+  // os << " custom_schedule_work_fn: " << (params.custom_schedule_work_fn ? "set" : "nullptr");
+  // os << " custom_schedule_work_fn_param: " << (params.custom_schedule_work_fn_param ? "set" : "nullptr");
   os << " }";
   return os;
 }
@@ -150,6 +153,8 @@ CreateThreadPoolHelper(Env* env, OrtThreadPoolParams options) {
   to.custom_create_thread_fn = options.custom_create_thread_fn;
   to.custom_thread_creation_options = options.custom_thread_creation_options;
   to.custom_join_thread_fn = options.custom_join_thread_fn;
+  to.custom_schedule_work_fn = options.custom_schedule_work_fn;
+  to.custom_schedule_work_fn_param = options.custom_schedule_work_fn_param;
   to.dynamic_block_base_ = options.dynamic_block_base_;
   if (to.custom_create_thread_fn) {
     ORT_ENFORCE(to.custom_join_thread_fn, "custom join thread function not set");
@@ -269,6 +274,28 @@ ORT_API_STATUS_IMPL(SetGlobalIntraOpThreadAffinity, _Inout_ OrtThreadingOptions*
   tp_options->intra_op_thread_pool_params.affinity_str = affinity_string;
   return nullptr;
 #endif
+}
+
+ORT_API_STATUS_IMPL(SetGlobalCustomScheduleWorkFn, _Inout_ OrtThreadingOptions* tp_options,
+                    _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, void* ort_custom_schedule_work_fn_param) {
+  if (!tp_options) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "Received null OrtThreadingOptions");
+  }
+  tp_options->inter_op_thread_pool_params.custom_schedule_work_fn = ort_custom_schedule_work_fn;
+  tp_options->intra_op_thread_pool_params.custom_schedule_work_fn = ort_custom_schedule_work_fn;
+  tp_options->inter_op_thread_pool_params.custom_schedule_work_fn_param = ort_custom_schedule_work_fn_param;
+  tp_options->intra_op_thread_pool_params.custom_schedule_work_fn_param = ort_custom_schedule_work_fn_param;
+  return nullptr;
+}
+
+ORT_API_STATUS_IMPL(GetCustomScheduleWorkDataSize, _Out_ size_t* work_data_size, _Out_ size_t* work_data_alignment) {
+  if (work_data_size) {
+    *work_data_size = (std::max)(sizeof(std::function<void()>), sizeof(std::function<void(unsigned)>));
+  }
+  if (work_data_alignment) {
+    *work_data_alignment = (std::max)(alignof(std::function<void()>), alignof(std::function<void(unsigned)>));
+  }
+  return nullptr;
 }
 
 }  // namespace OrtApis

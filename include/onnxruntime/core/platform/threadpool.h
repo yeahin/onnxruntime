@@ -369,6 +369,8 @@ class ThreadPool {
  private:
   friend class LoopCounter;
 
+  class CustomThreadPoolWrapper;
+
   // Returns the number of threads created in the pool.  This may be different from the
   // value returned by DegreeOfParallelism to code using the pool.
   int NumThreads() const;
@@ -425,6 +427,7 @@ class ThreadPool {
 
   // If used, underlying_threadpool_ is instantiated and owned by the ThreadPool.
   std::unique_ptr<ThreadPoolTempl<Env> > extended_eigen_threadpool_;
+  std::unique_ptr<CustomThreadPoolWrapper> custom_threadpool_wrapper_;
 
   // Force the thread pool to run in hybrid mode on a normal cpu.
   bool force_hybrid_ = false;
