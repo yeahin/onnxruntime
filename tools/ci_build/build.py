@@ -1239,8 +1239,9 @@ def generate_build_tree(
         ]
 
     # VitisAI and OpenVINO providers currently only support full_protobuf option.
-    if args.use_full_protobuf or args.use_openvino or args.use_vitisai or args.gen_doc:
-        cmake_args += ["-Donnxruntime_USE_FULL_PROTOBUF=ON", "-DProtobuf_USE_STATIC_LIBS=ON"]
+    # if args.use_full_protobuf or args.use_openvino or args.use_vitisai or args.gen_doc:
+    #    cmake_args += ["-Donnxruntime_USE_FULL_PROTOBUF=ON", "-DProtobuf_USE_STATIC_LIBS=ON"]
+    cmake_args += ["-Donnxruntime_USE_FULL_PROTOBUF=OFF"]
 
     if args.use_tvm and args.llvm_path is not None:
         cmake_args += [f"-DLLVM_DIR={args.llvm_path}"]
@@ -1540,6 +1541,9 @@ def generate_build_tree(
                     cflags += ["/MP"]
                 else:
                     cflags += ["/MP%d" % njobs]
+
+        cflags += ["/DWIN32", "/D_WINDOWS", "/DWINAPI_FAMILY=100", "/DWINVER=0x0A00", "/D_WIN32_WINNT=0x0A00", "/DNTDDI_VERSION=0x0A000000", "/O2", "/Ob1", "/DNDEBUG", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
+
         # Setup default values for cflags/cxxflags/ldflags.
         # The values set here are purely for security and compliance purposes. ONNX Runtime should work fine without these flags.
         if (
