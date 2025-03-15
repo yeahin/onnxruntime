@@ -524,6 +524,16 @@ ORT_API_STATUS_IMPL(KernelContext_GetScratchBuffer, _In_ const OrtKernelContext*
 
 ORT_API_STATUS_IMPL(KernelInfoGetAllocator, _In_ const OrtKernelInfo* info, _In_ OrtMemType mem_type, _Outptr_ OrtAllocator** out);
 
+ORT_API_STATUS_IMPL(CreateLoraAdapter, _In_ const ORTCHAR_T* adapter_file_path, _In_ OrtAllocator* allocator,
+                    _Outptr_ OrtLoraAdapter** out);
+ORT_API_STATUS_IMPL(CreateLoraAdapterFromArray, _In_ const void* bytes, size_t num_bytes, _In_ OrtAllocator* allocator,
+                    _Outptr_ OrtLoraAdapter** out);
+ORT_API(void, ReleaseLoraAdapter, _Frees_ptr_opt_ OrtLoraAdapter*);
+ORT_API_STATUS_IMPL(RunOptionsAddActiveLoraAdapter, _Inout_ OrtRunOptions* options, _In_ const OrtLoraAdapter* adapter);
+
+ORT_API_STATUS_IMPL(SetEpDynamicOptions, _Inout_ OrtSession* sess, _In_reads_(kv_len) const char* const* keys,
+                    _In_reads_(kv_len) const char* const* values, _In_ size_t kv_len);
+
 ORT_API_STATUS_IMPL(SessionOptionsSetCustomScheduleWorkFn, _Inout_ OrtSessionOptions* options,
                     _In_ OrtCustomScheduleWorkFn ort_custom_schedule_work_fn, _In_ void* ort_custom_schedule_work_fn_param);
 ORT_API_STATUS_IMPL(SetGlobalCustomScheduleWorkFn, _Inout_ OrtThreadingOptions* tp_options,
