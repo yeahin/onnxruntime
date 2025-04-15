@@ -53,7 +53,7 @@ void CUDAGraphManager::CaptureBegin(CudaGraphAnnotation_t cuda_graph_annotation_
   // will support multiple threads. For multiple threads with multiple graphs
   // and streams, `cudaStreamCaptureModeGlobal` needs to be changed to
   // `cudaStreamCaptureModeThreadLocal`
-  CUDA_CALL_THROW(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal));
+  CUDA_CALL_THROW(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeThreadLocal));
 }
 
 void CUDAGraphManager::CaptureEnd(CudaGraphAnnotation_t cuda_graph_annotation_id) {
