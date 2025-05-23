@@ -48,6 +48,7 @@ class TypeHelper:
             "tensor(int32)": torch.int32,
             "tensor(float)": torch.float32,
             "tensor(float16)": torch.float16,
+            "tensor(bfloat16)": torch.bfloat16,
             "tensor(bool)": torch.bool,
         }
         if ort_type not in ort_type_to_torch_type_map:
