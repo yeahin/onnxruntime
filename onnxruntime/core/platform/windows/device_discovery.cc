@@ -35,8 +35,12 @@ using Microsoft::WRL::ComPtr;
 
 //// For DXCore info.
 #include <initguid.h>
+
+#if defined(ENABLE_DXCORE)
 #include <dxcore.h>
 #include <dxcore_interface.h>
+#endif
+
 #include <wil/com.h>
 
 #include "core/common/cpuid_info.h"
@@ -44,7 +48,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace onnxruntime {
 // unsupported in minimal build. also needs xbox specific handling to be implemented.
-#if !defined(ORT_MINIMAL_BUILD) && !defined(_GAMING_XBOX)
+#if defined(ENABLE_DXCORE) && !defined(ORT_MINIMAL_BUILD) && !defined(_GAMING_XBOX)
 namespace {
 
 // device info we accumulate from various sources
