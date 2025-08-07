@@ -279,7 +279,7 @@ class TensorrtExecutionProvider : public IExecutionProvider {
 
   bool IsGraphCaptureEnabled() const override;
   bool IsGraphCaptured(int graph_annotation_id) const override;
-  Status ReplayGraph(int graph_annotation_id) override;
+  Status ReplayGraph(int graph_annotation_id, bool sync_stream) override;
 
   static common::Status RefitEngine(std::string onnx_model_filename,
                                     std::string& onnx_model_folder_path,
@@ -427,7 +427,7 @@ class TensorrtExecutionProvider : public IExecutionProvider {
     void CaptureBegin(int graph_annotation_id);
     void CaptureEnd(int graph_annotation_id);
     bool IsGraphCaptured(int graph_annotation_id) const;
-    Status ReplayGraph(int graph_annotation_id);
+    Status ReplayGraph(int graph_annotation_id, bool sync_stream);
     void IncrementRegularRunCountBeforeGraphCapture();
 
    private:

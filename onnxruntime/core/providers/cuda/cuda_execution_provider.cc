@@ -237,8 +237,8 @@ bool CUDAExecutionProvider::PerThreadContext::IsGraphCaptured(CudaGraphAnnotatio
   return cuda_graph_.IsGraphCaptured(graph_annotation_id);
 }
 
-Status CUDAExecutionProvider::PerThreadContext::ReplayGraph(CudaGraphAnnotation_t graph_annotation_id) {
-  return cuda_graph_.Replay(graph_annotation_id);
+Status CUDAExecutionProvider::PerThreadContext::ReplayGraph(CudaGraphAnnotation_t graph_annotation_id, bool sync_stream) {
+  return cuda_graph_.Replay(graph_annotation_id, sync_stream);
 }
 
 void CUDAExecutionProvider::PerThreadContext::IncrementRegularRunCountBeforeGraphCapture(
@@ -436,7 +436,9 @@ Status CUDAExecutionProvider::OnRunEnd(bool sync_stream, const onnxruntime::RunO
       GetPerThreadContext().CaptureEnd(cuda_graph_annotation_id);
       // CUDA work issued to a capturing stream doesn’t actually run on the GPU,
       // so run the captured graph here to actually execute the work.
-      ORT_RETURN_IF_ERROR(GetPerThreadContext().ReplayGraph(cuda_graph_annotation_id));
+      ORT_RETURN_IF_ERROR(GetPerThreadContext().ReplayGraph(
+          cuda_graph_annotation_id, 
+          run_options.GetConfigOptions().GetConfigOrDefault(kOrtRunOptionsConfigDisableSynchronizeExecutionProviders, "0") == "0"));
     } else {
       GetPerThreadContext().IncrementRegularRunCountBeforeGraphCapture(cuda_graph_annotation_id);
     }
@@ -471,8 +473,8 @@ bool CUDAExecutionProvider::IsGraphCaptured(int graph_annotation_id) const {
   return GetPerThreadContext().IsGraphCaptured(graph_annotation_id);
 }
 
-Status CUDAExecutionProvider::ReplayGraph(int graph_annotation_id) {
-  return GetPerThreadContext().ReplayGraph(graph_annotation_id);
+Status CUDAExecutionProvider::ReplayGraph(int graph_annotation_id, bool sync_stream) {
+  return GetPerThreadContext().ReplayGraph(graph_annotation_id, sync_stream);
 }
 
 namespace cuda {

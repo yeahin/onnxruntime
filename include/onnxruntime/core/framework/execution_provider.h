@@ -255,7 +255,7 @@ class IExecutionProvider {
   /**
      Run the instantiated graph.
    */
-  virtual common::Status ReplayGraph(int /*graph_annotation_id*/) {
+  virtual common::Status ReplayGraph(int /*graph_annotation_id*/, bool sync_stream) {
     return Status::OK();
   }
 
