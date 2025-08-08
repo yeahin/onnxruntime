@@ -346,8 +346,8 @@ class TensorrtExecutionProvider : public IExecutionProvider {
   std::unordered_set<std::string> control_flow_op_set_ = {"If", "Loop", "Scan"};
   mutable std::unordered_map<std::string, std::unique_ptr<SubGraphContext>> subgraph_context_map_;
 
-  mutable std::unique_ptr<nvinfer1::IBuilder> builder_;
-
+  mutable std::shared_ptr<nvinfer1::IBuilder> builder_;
+  mutable std::unique_ptr<nvinfer1::INetworkDefinition> network_;
   // Following maps that hold TRT objects will be accessible by different threads if ORT is using multithreading.
   // In general, TensorRT objects are not thread safe; accesses to an object from different threads must be serialized by the client.
   // But there are still some thread safe operations, please see here https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#threading
@@ -584,6 +584,9 @@ class TensorrtExecutionProvider : public IExecutionProvider {
    * Get the pointer to the IBuilder instance.
    * This function only creates the instance at the first time it's being called."
    */
-  nvinfer1::IBuilder* GetBuilder(TensorrtLogger& trt_logger) const;
+  std::shared_ptr<nvinfer1::IBuilder> GetBuilder(TensorrtLogger& trt_logger) const;
+
+  nvinfer1::INetworkDefinition* GetNetwork(TensorrtLogger& trt_logger, std::shared_ptr<nvinfer1::IBuilder> builder = nullptr) const;
+
 };
 }  // namespace onnxruntime
