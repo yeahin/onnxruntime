@@ -59,7 +59,6 @@ static const std::string kEpContextComputeCapabilityEnable = "ORT_EP_CONTEXT_COM
 static const std::string kEngineCachePrefix = "ORT_TENSORRT_CACHE_PREFIX";
 // Old env variable for backward compatibility
 static const std::string kEngineCachePath = "ORT_TENSORRT_ENGINE_CACHE_PATH";
-static const std::string kEngineUpdateDisable = "ORT_TENSORRT_ENGINE_UPDATE_DISABLE";
 }  // namespace tensorrt_env_vars
 
 class TensorrtLogger : public nvinfer1::ILogger {

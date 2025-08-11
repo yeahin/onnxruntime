@@ -3327,7 +3327,6 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
     output_types[output_name] = tensor_type.elem_type();
   }
 
-  info_.engine_update_disable |= onnxruntime::GetEnvironmentVar(tensorrt_env_vars::kEngineUpdateDisable) == "1";
   // Save TRT engine, other TRT objects and input/output info to map
   if (!info_.engine_update_disable) {
       parsers_.emplace(fused_node.Name(), std::move(trt_parser));
