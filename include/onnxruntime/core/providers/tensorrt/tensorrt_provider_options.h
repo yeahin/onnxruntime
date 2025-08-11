@@ -90,4 +90,5 @@ struct OrtTensorRTProviderOptionsV2 {
   int trt_engine_hw_compatible{0};               // Enable hardware compatibility. Default 0 = false, nonzero = true
   int trt_cublas_disable{ 0 };
   int trt_cudnn_disable{ 0 };
+  int trt_engine_update_disable{ 0 };
 };

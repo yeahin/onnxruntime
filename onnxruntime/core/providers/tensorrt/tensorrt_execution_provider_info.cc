@@ -58,6 +58,7 @@ constexpr const char* kONNXBytestream = "trt_onnx_bytestream";
 constexpr const char* kONNXBytestreamSize = "trt_onnx_bytestream_size";
 constexpr const char* kCublasDisable = "trt_cublas_disable";
 constexpr const char* kCudnnDisable = "trt_cudnn_disable";
+constexpr const char* kEngineUpdateDisable = "trt_engine_update_disable";
 
 }  // namespace provider_option_names
 }  // namespace tensorrt
@@ -129,6 +130,7 @@ TensorrtExecutionProviderInfo TensorrtExecutionProviderInfo::FromProviderOptions
           .AddAssignmentToReference(tensorrt::provider_option_names::kEngineHwCompatible, info.engine_hw_compatible)
           .AddAssignmentToReference(tensorrt::provider_option_names::kCublasDisable, info.cublas_disable)
           .AddAssignmentToReference(tensorrt::provider_option_names::kCudnnDisable, info.cudnn_disable)
+          .AddAssignmentToReference(tensorrt::provider_option_names::kEngineUpdateDisable, info.engine_update_disable)
           .AddValueParser(
               tensorrt::provider_option_names::kONNXBytestream,
               [&onnx_bytestream](const std::string& value_str) -> Status {
@@ -362,5 +364,7 @@ void TensorrtExecutionProviderInfo::UpdateProviderOptions(void* provider_options
   trt_provider_options_v2.trt_onnx_bytestream_size = internal_options.onnx_bytestream_size;
   trt_provider_options_v2.trt_cublas_disable = internal_options.cublas_disable;
   trt_provider_options_v2.trt_cudnn_disable = internal_options.cudnn_disable;
+  trt_provider_options_v2.trt_engine_update_disable = internal_options.engine_update_disable;
+
 }
 }  // namespace onnxruntime
