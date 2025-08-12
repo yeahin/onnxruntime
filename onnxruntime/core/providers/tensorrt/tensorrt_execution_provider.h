@@ -585,6 +585,5 @@ class TensorrtExecutionProvider : public IExecutionProvider {
    * This function only creates the instance at the first time it's being called."
    */
   std::shared_ptr<nvinfer1::IBuilder> GetBuilder(TensorrtLogger& trt_logger) const;
-  void ResetBuilder() const;
 };
 }  // namespace onnxruntime

@@ -1884,11 +1884,6 @@ std::shared_ptr<nvinfer1::IBuilder> TensorrtExecutionProvider::GetBuilder(Tensor
   return builder_;
 }
 
-void TensorrtExecutionProvider::ResetBuilder() const {
-    auto lock = GetApiLock();
-    builder_.reset();          
-}
-
 void TensorrtExecutionProvider::GetCustomOpDomainList(std::vector<OrtCustomOpDomain*>& custom_op_domain_list) const {
   std::string extra_plugin_lib_paths{""};
   if (info_.has_trt_options) {
