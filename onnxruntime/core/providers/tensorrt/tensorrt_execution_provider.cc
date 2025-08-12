@@ -1782,8 +1782,12 @@ TensorrtExecutionProvider::~TensorrtExecutionProvider() {
 
   if (external_stream_) {
 #ifndef USE_CUDA_MINIMAL
-    ORT_IGNORE_RETURN_VALUE(CUBLAS_CALL(cublasDestroy(external_cublas_handle_)));
-    ORT_IGNORE_RETURN_VALUE(CUDNN_CALL(cudnnDestroy(external_cudnn_handle_)));
+    if (!info_.cublas_disable) {
+      ORT_IGNORE_RETURN_VALUE(CUBLAS_CALL(cublasDestroy(external_cublas_handle_)));
+    }
+    if (!info_.cudnn_disable) {
+      ORT_IGNORE_RETURN_VALUE(CUDNN_CALL(cudnnDestroy(external_cudnn_handle_)));
+    }
 #endif
   }
 
@@ -3328,15 +3332,8 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
   }
 
   // Save TRT engine, other TRT objects and input/output info to map
-  if (!info_.engine_update_disable) {
-      parsers_.emplace(fused_node.Name(), std::move(trt_parser));
-      networks_.emplace(fused_node.Name(), std::move(trt_network));
-  } else {
-      trt_parser.reset();
-      trt_config.reset();
-      trt_network.reset();
-      builder_.reset();
-  }
+  parsers_.emplace(fused_node.Name(), std::move(trt_parser));
+  networks_.emplace(fused_node.Name(), std::move(trt_network));
   engines_.emplace(fused_node.Name(), std::move(trt_engine));
   contexts_.emplace(fused_node.Name(), std::move(trt_context));
   input_info_[fused_node.Name()].push_back(input_indexes);
@@ -3547,7 +3544,7 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
       }
     }
 
-    if (!info_.engine_update_disable)
+    if (builder_)
     {
         // Check and update shape ranges for dynamic shape inputs.
         for (int i = 0, end = num_inputs; i < end; ++i) {
@@ -3595,9 +3592,11 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
             // Set precision
             if (trt_state->fp16_enable && trt_state->int8_enable) {
                 trt_config->setFlags(1U << static_cast<uint32_t>(nvinfer1::BuilderFlag::kFP16) | 1U << static_cast<uint32_t>(nvinfer1::BuilderFlag::kINT8));
-            } else if (trt_state->fp16_enable) {
+            }
+            else if (trt_state->fp16_enable) {
                 trt_config->setFlag(nvinfer1::BuilderFlag::kFP16);
-            } else if (trt_state->int8_enable) {
+            }
+            else if (trt_state->int8_enable) {
                 trt_config->setFlag(nvinfer1::BuilderFlag::kINT8);
             }
 
@@ -3720,10 +3719,12 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
                                 "TensorRT EP could not call engine encryption function encrypt");
                         }
                         LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Serialized and encrypted engine " + encrypted_engine_cache_path;
-                    } else {
+                    }
+                    else {
                         LOGS_DEFAULT(WARNING) << "[TensorRT EP] Engine cache encryption function is not found. No cache is written to disk";
                     }
-                } else {
+                }
+                else {
                     std::ofstream file(engine_cache_path, std::ios::binary | std::ios::out);
                     file.write(reinterpret_cast<char*>(serialized_engine->data()), serialized_engine->size());
                     LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Serialized " + engine_cache_path;
@@ -3766,7 +3767,17 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
                 }
             }
         }
-    } // engine_update_disable
+    }
+
+    if (info_.engine_update_disable && builder_)
+    {
+        trt_state->parser->reset();
+        trt_state->parser = nullptr;
+        trt_state->network->reset();
+        trt_state->network = nullptr;
+        trt_state->builder = nullptr;
+        builder_.reset();
+    }
 
     if (context_update) {
       if (trt_state->context_memory_sharing_enable) {
