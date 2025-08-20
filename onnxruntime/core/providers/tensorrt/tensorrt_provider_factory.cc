@@ -118,6 +118,9 @@ struct Tensorrt_Provider : Provider {
     info.engine_hw_compatible = options.trt_engine_hw_compatible != 0;
     info.onnx_bytestream = options.trt_onnx_bytestream;
     info.onnx_bytestream_size = options.trt_onnx_bytestream_size;
+    info.cublas_disable = options.trt_cublas_disable;
+    info.cudnn_disable = options.trt_cudnn_disable;
+    info.engine_update_disable = options.trt_engine_update_disable;
 
     return std::make_shared<TensorrtProviderFactory>(info);
   }
