@@ -1782,10 +1782,10 @@ TensorrtExecutionProvider::~TensorrtExecutionProvider() {
 
   if (external_stream_) {
 #ifndef USE_CUDA_MINIMAL
-    if (!info_.cublas_disable) {
+    if (external_cublas_handle_) {
       ORT_IGNORE_RETURN_VALUE(CUBLAS_CALL(cublasDestroy(external_cublas_handle_)));
     }
-    if (!info_.cudnn_disable) {
+    if (external_cudnn_handle_) {
       ORT_IGNORE_RETURN_VALUE(CUDNN_CALL(cudnnDestroy(external_cudnn_handle_)));
     }
 #endif
