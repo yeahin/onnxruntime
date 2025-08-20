@@ -59,8 +59,6 @@ constexpr const char* kONNXBytestream = "trt_onnx_bytestream";
 constexpr const char* kONNXBytestreamSize = "trt_onnx_bytestream_size";
 constexpr const char* kOpTypesToExclude = "trt_op_types_to_exclude";
 constexpr const char* kPreviewFeatures = "trt_preview_features";
-constexpr const char* kCublasDisable = "trt_cublas_disable";
-constexpr const char* kCudnnDisable = "trt_cudnn_disable";
 constexpr const char* kEngineUpdateDisable = "trt_engine_update_disable";
 
 }  // namespace provider_option_names
@@ -132,8 +130,6 @@ TensorrtExecutionProviderInfo TensorrtExecutionProviderInfo::FromProviderOptions
           .AddAssignmentToReference(tensorrt::provider_option_names::kEpContextFilePath, info.ep_context_file_path)
           .AddAssignmentToReference(tensorrt::provider_option_names::kEpContextEmbedMode, info.ep_context_embed_mode)
           .AddAssignmentToReference(tensorrt::provider_option_names::kEngineHwCompatible, info.engine_hw_compatible)
-          .AddAssignmentToReference(tensorrt::provider_option_names::kCublasDisable, info.cublas_disable)
-          .AddAssignmentToReference(tensorrt::provider_option_names::kCudnnDisable, info.cudnn_disable)
           .AddAssignmentToReference(tensorrt::provider_option_names::kEngineUpdateDisable, info.engine_update_disable)
           .AddValueParser(
               tensorrt::provider_option_names::kONNXBytestream,
@@ -377,8 +373,6 @@ void TensorrtExecutionProviderInfo::UpdateProviderOptions(void* provider_options
   trt_provider_options_v2.trt_op_types_to_exclude = copy_string_if_needed(internal_options.op_types_to_exclude);
   trt_provider_options_v2.trt_preview_features = copy_string_if_needed(internal_options.preview_features);
   trt_provider_options_v2.trt_onnx_bytestream_size = internal_options.onnx_bytestream_size;
-  trt_provider_options_v2.trt_cublas_disable = internal_options.cublas_disable;
-  trt_provider_options_v2.trt_cudnn_disable = internal_options.cudnn_disable;
   trt_provider_options_v2.trt_engine_update_disable = internal_options.engine_update_disable;
 
 }

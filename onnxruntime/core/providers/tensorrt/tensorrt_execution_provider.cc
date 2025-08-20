@@ -3795,19 +3795,19 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
                 }
             }
 
-      // Set precision
-      if (trt_state->int8_enable) {
-        trt_config->setFlag(nvinfer1::BuilderFlag::kINT8);
-        LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] INT8 mode is enabled";
-      }
-      if (trt_state->fp16_enable) {
-        trt_config->setFlag(nvinfer1::BuilderFlag::kFP16);
-        LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] FP16 mode is enabled";
-      }
-      if (trt_state->bf16_enable) {
-        trt_config->setFlag(nvinfer1::BuilderFlag::kBF16);
-        LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] BF16 mode is enabled";
-      }
+            // Set precision
+            if (trt_state->int8_enable) {
+              trt_config->setFlag(nvinfer1::BuilderFlag::kINT8);
+                LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] INT8 mode is enabled";
+            }
+            if (trt_state->fp16_enable) {
+              trt_config->setFlag(nvinfer1::BuilderFlag::kFP16);
+              LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] FP16 mode is enabled";
+            }
+            if (trt_state->bf16_enable) {
+              trt_config->setFlag(nvinfer1::BuilderFlag::kBF16);
+              LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] BF16 mode is enabled";
+            }
 
             // Set DLA (DLA can only run with FP16 or INT8)
             if ((trt_state->fp16_enable || trt_state->int8_enable) && trt_state->dla_enable) {

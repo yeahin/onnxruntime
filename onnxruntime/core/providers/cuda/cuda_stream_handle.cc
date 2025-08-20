@@ -77,15 +77,9 @@ CudaStream::CudaStream(cudaStream_t stream,
     CUDNN_CALL_THROW(cudnnSetStream(cudnn_handle_, stream));
   } else {
     cublas_handle_ = external_cublas_handle;
-    if (cublas_handle_)
-    {
-        CUBLAS_CALL_THROW(cublasSetStream(cublas_handle_, stream));
-    }
+    CUBLAS_CALL_THROW(cublasSetStream(cublas_handle_, stream));
     cudnn_handle_ = external_cudnn_handle;
-    if (cudnn_handle_)
-    {
-        CUDNN_CALL_THROW(cudnnSetStream(cudnn_handle_, stream));
-    }
+    CUDNN_CALL_THROW(cudnnSetStream(cudnn_handle_, stream));
   }
 #else
   (void)(external_cudnn_handle);
