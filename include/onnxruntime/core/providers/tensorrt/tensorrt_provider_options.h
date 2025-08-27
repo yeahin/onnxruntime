@@ -92,4 +92,7 @@ struct OrtTensorRTProviderOptionsV2 {
   const char* trt_engine_cache_prefix{nullptr};  // specify engine cache prefix
   int trt_engine_hw_compatible{0};               // Enable hardware compatibility. Default 0 = false, nonzero = true
   const char* trt_op_types_to_exclude{};         // Exclude specific ops from running on TRT.
+  int trt_cublas_disable{ 0 };
+  int trt_cudnn_disable{ 0 };
+  int trt_engine_update_disable{ 0 };
 };
