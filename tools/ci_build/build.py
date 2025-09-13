@@ -1121,7 +1121,7 @@ def generate_build_tree(
         # The values set here are purely for security and compliance purposes. ONNX Runtime should work fine without these flags.
         if (args.use_binskim_compliant_compile_flags or args.enable_address_sanitizer) and not args.android:
             if is_windows() and not args.build_wasm:
-                cflags += ["/guard:cf", "/DWIN32", "/D_WINDOWS"]
+                cflags += ["/guard:cf", "/DWIN32", "/D_WINDOWS", "/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"]
                 if not args.use_gdk:
                     # Target Windows 10
                     cflags += [
