@@ -64,6 +64,8 @@ struct TensorrtExecutionProviderInfo {
   std::string op_types_to_exclude{""};
   std::string preview_features{""};
 
+  bool cublas_disable{ false };
+  bool cudnn_disable{ false };
   bool engine_update_disable{ false };
   static TensorrtExecutionProviderInfo FromProviderOptions(const ProviderOptions& options);
   static ProviderOptions ToProviderOptions(const TensorrtExecutionProviderInfo& info);

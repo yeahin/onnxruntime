@@ -2011,6 +2011,8 @@ OrtTensorRTProviderOptionsV2 OrtTensorRTProviderOptionsToOrtTensorRTProviderOpti
   trt_options_converted.trt_engine_hw_compatible = 0;
   trt_options_converted.trt_preview_features = "";
 
+  trt_options_converted.trt_cublas_disable = 0;
+  trt_options_converted.trt_cudnn_disable = 0;
   trt_options_converted.trt_engine_update_disable = 0;
   return trt_options_converted;
 }
