@@ -1947,13 +1947,17 @@ Status TensorrtExecutionProvider::OnRunEnd(bool sync_stream, const onnxruntime::
 // Note: This function is not thread safe. Calls to this function from different threads must be serialized
 // even though it doesn't make sense to have multiple threads initializing the same inference session.
 std::shared_ptr<nvinfer1::IBuilder> TensorrtExecutionProvider::GetBuilder(TensorrtLogger& trt_logger) const {
-  auto lock = GetApiLock();
-
-  if (!builder_) {
+  if (!builder_)
+  {
+    LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] GetBuilder() is acquiring API lock";
+    auto lock = GetApiLock();
+    LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] GetBuilder() acquired API lock";
+    if (!builder_)
     {
       builder_ = std::shared_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(trt_logger));
     }
   }
+
   return builder_;
 }
 
@@ -2344,7 +2348,11 @@ SubGraphCollection_t TensorrtExecutionProvider::GetSupportedList(SubGraphCollect
         // Get supported node list recursively
         SubGraphCollection_t parser_nodes_list;
         TensorrtLogger& trt_logger = GetTensorrtLogger(detailed_build_log_);
+
+        LOGS_DEFAULT(INFO) << "GetSupportedList: Calling GetBuilder ";
         auto trt_builder = GetBuilder(trt_logger);
+        LOGS_DEFAULT(INFO) << "GetSupportedList: Return from GetBuilder, use count " << trt_builder.use_count();
+
         auto network_flags = 0;
 #if NV_TENSORRT_MAJOR > 8
         network_flags |= (fp16_enable_ || int8_enable_ || bf16_enable_) ? 0 : 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kSTRONGLY_TYPED);
@@ -2957,7 +2965,11 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
   }
 
   TensorrtLogger& trt_logger = GetTensorrtLogger(detailed_build_log_);
+
+  LOGS_DEFAULT(INFO) << "CreateNodeComputeInfoFromGraph: Calling GetBuilder ";
   auto trt_builder = GetBuilder(trt_logger);
+  LOGS_DEFAULT(INFO) << "CreateNodeComputeInfoFromGraph: Return from GetBuilder, use count " << trt_builder.use_count();
+
   auto network_flags = 0;
 #if NV_TENSORRT_MAJOR > 8
   network_flags |= (fp16_enable_ || int8_enable_ || bf16_enable_) ? 0 : 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kSTRONGLY_TYPED);
@@ -3987,12 +3999,22 @@ Status TensorrtExecutionProvider::CreateNodeComputeInfoFromGraph(const GraphView
 
     if (info_.engine_update_disable && builder_)
     {
-        trt_state->parser->reset();
-        trt_state->parser = nullptr;
-        trt_state->network->reset();
-        trt_state->network = nullptr;
-        trt_state->builder = nullptr;
-        builder_.reset();
+        static std::atomic_bool s_flag{ false };
+        if (s_flag.exchange(true))
+        {
+            LOGS_DEFAULT(INFO) << "CreateNodeComputeInfoFromGraph: free builder use count" << builder_.use_count();
+            trt_state->parser->reset();
+            trt_state->parser = nullptr;
+            trt_state->network->reset();
+            trt_state->network = nullptr;
+            trt_state->builder = nullptr;
+            builder_.reset();
+            LOGS_DEFAULT(INFO) << "CreateNodeComputeInfoFromGraph: free builder done";
+        }
+        else
+        {
+            LOGS_DEFAULT(INFO) << "CreateNodeComputeInfoFromGraph: skip free builder use count" << builder_.use_count();
+        }
     }
 
     if (context_update) {
