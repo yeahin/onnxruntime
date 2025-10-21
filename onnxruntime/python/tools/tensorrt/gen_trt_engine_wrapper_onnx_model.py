@@ -116,6 +116,8 @@ class TensorRTEngineWrapperCreator:
             return TensorProto.FLOAT16
         elif trt_data_type == trt.DataType.BF16:
             return TensorProto.BFLOAT16
+        elif trt_data_type == trt.DataType.FP8:
+            return TensorProto.FLOAT8E4M3FN
         elif trt_data_type == trt.DataType.INT8:
             return TensorProto.INT8
         elif trt_data_type == trt.DataType.INT32:
