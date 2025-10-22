@@ -54,6 +54,7 @@ Status ShaderHelper::Init() {
 
   // init body string stream
   bool is_1d_dispatch = dispatch_group_size_y_ == 1 && dispatch_group_size_z_ == 1;
+  bool use_indirect_dispatch = program_.IndirectDispatchTensor() != nullptr;
   body_.reserve(4096);
   additional_implementation_.reserve(1024);
 
@@ -68,20 +69,37 @@ Status ShaderHelper::Init() {
                 "        @builtin(subgroup_invocation_id) sg_id : u32,\n"
                 "        @builtin(subgroup_size) sg_size : u32";
   }
-  if (!is_1d_dispatch) {
-    body_ss_ << ",\n"
-                "        @builtin(num_workgroups) num_workgroups : vec3<u32>";
-  }
-  body_ss_ << ") {\n";
-  if (is_1d_dispatch) {
+  // When using indirect dispatch, avoid @builtin(num_workgroups) to skip Dawn's validation
+  // and duplication overhead in TransformIndirectDispatchBuffer.
+  // Instead, the dispatch dimensions will be read from the indirect buffer at runtime.
+  if (use_indirect_dispatch) {
+    body_ss_ << ") {\n";
+    // For indirect dispatch, read the actual dispatch dimensions from the indirect buffer.
+    // The indirect buffer format is: [x, y, z] where x, y, z are the workgroup counts.
+    // We read these values to calculate workgroup_idx accurately based on actual dispatch.
+    body_ss_ << "  let num_workgroups_x = indirect_buffer[0];\n"
+                "  let num_workgroups_y = indirect_buffer[1];\n"
+                "  let workgroup_idx = workgroup_id.z * num_workgroups_x * num_workgroups_y + workgroup_id.y * num_workgroups_x + workgroup_id.x;\n"
+                "  let global_idx = workgroup_idx * (workgroup_size_x * workgroup_size_y * workgroup_size_z) + local_idx;\n";
+  } else if (is_1d_dispatch) {
+    body_ss_ << ") {\n";
     body_ss_ << "  let global_idx = global_id.x;\n"
                 "  let workgroup_idx = workgroup_id.x;\n";
   } else {
+    body_ss_ << ",\n"
+                "        @builtin(num_workgroups) num_workgroups : vec3<u32>) {\n";
     body_ss_ << "  let workgroup_idx = workgroup_id.z * num_workgroups[0] * num_workgroups[1] + workgroup_id.y * num_workgroups[0] + workgroup_id.x;\n"
                 "  let global_idx = workgroup_idx * (workgroup_size_x * workgroup_size_y * workgroup_size_z) + local_idx;\n";
   }
 
   return Status::OK();
+}
+
+void ShaderHelper::FinalizeInputs() {
+  // Automatically add indirect buffer as the last shader input when using indirect dispatch.
+  if (program_.IndirectDispatchTensor() != nullptr) {
+    AddInput("indirect_buffer", ShaderUsage::None);
+  }
 }
 
 const ShaderVariableHelper& ShaderHelper::AddInput(const std::string& name, ShaderUsage usage) {
@@ -91,7 +109,7 @@ const ShaderVariableHelper& ShaderHelper::AddInput(const std::string& name, Shad
 
   const auto& dims = program_.Inputs()[input_index].use_override_shape ? program_.Inputs()[input_index].override_shape
                                                                        : program_.Inputs()[input_index].tensor->Shape();
-  return AddVariableImpl(true, name, usage, dims);
+  return AddVariableImpl(true, name, usage, dims, program_.Inputs()[input_index].segments);
 }
 
 const ShaderVariableHelper& ShaderHelper::AddOutput(const std::string& name, ShaderUsage usage) {
@@ -101,7 +119,7 @@ const ShaderVariableHelper& ShaderHelper::AddOutput(const std::string& name, Sha
 
   const auto& dims = program_.Outputs()[output_index].use_override_shape ? program_.Outputs()[output_index].override_shape
                                                                          : program_.Outputs()[output_index].tensor->Shape();
-  return AddVariableImpl(false, name, usage, dims);
+  return AddVariableImpl(false, name, usage, dims, program_.Outputs()[output_index].segments);
 }
 
 const ShaderIndicesHelper& ShaderHelper::AddIndices(const std::string& name, ShaderUsage usage) {
@@ -263,12 +281,16 @@ Status ShaderHelper::ValidateVariable(const ProgramOutput& output, const ShaderV
 
 #endif  // NDEBUG
 
-const ShaderVariableHelper& ShaderHelper::AddVariableImpl(bool is_input,
-                                                          const std::string& name,
-                                                          ShaderUsage usage,
-                                                          const TensorShape& dims) {
-  ORT_ENFORCE(input_vars_.size() + output_vars_.size() < limits_.maxStorageBuffersPerShaderStage,
-              "Too many storage buffers in shader. Max is ", limits_.maxStorageBuffersPerShaderStage);
+ShaderVariableHelper& ShaderHelper::AddVariableImpl(bool is_input,
+                                                    const std::string& name,
+                                                    ShaderUsage usage,
+                                                    const TensorShape& dims,
+                                                    uint32_t segments) {
+  // Add the segments for the new variable we're about to create
+  numbers_storage_buffers_ += segments;
+  ORT_ENFORCE(numbers_storage_buffers_ <= limits_.maxStorageBuffersPerShaderStage,
+              "Too many storage buffers in shader. Current: ", numbers_storage_buffers_,
+              ", Max is ", limits_.maxStorageBuffersPerShaderStage);
 
   ProgramVariableDataType type = ProgramVariableDataType::InvalidType;
   auto& vars = is_input ? input_vars_ : output_vars_;
@@ -276,12 +298,18 @@ const ShaderVariableHelper& ShaderHelper::AddVariableImpl(bool is_input,
   if (is_input) {
     const auto& input = program_.Inputs()[vars.size()];
     type = input.var_type;
+    if (segments > 1) {
+      usage |= ShaderUsage::UseGetByOffsetSegments;
+    }
   } else {
     const auto& output = program_.Outputs()[vars.size()];
     type = output.var_type;
+    if (segments > 1) {
+      usage |= ShaderUsage::UseSetByOffsetSegments;
+    }
   }
 
-  const auto& var = vars.emplace_back(std::make_unique<ShaderVariableHelper>(name, type, usage, dims));
+  const auto& var = vars.emplace_back(std::make_unique<ShaderVariableHelper>(name, type, usage, dims, segments, limits_.maxStorageBufferBindingSize));
   return *var;
 }
 
@@ -379,6 +407,10 @@ Status ShaderHelper::GenerateSourceCode(std::string& code, std::vector<int>& sha
 #if !defined(__wasm__)
   if (device_.HasFeature(wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix)) {
     ss << "enable chromium_experimental_subgroup_matrix;\n";
+
+    // Dawn enforces the subgroup matrix builtin arguments to be uniform in change https://dawn-review.googlesource.com/c/dawn/+/236054
+    // Since we use `subgroup_id` as the subgroup matrix builtin argument, we have to turn off this restriction
+    ss << "diagnostic (off, chromium.subgroup_matrix_uniformity);\n";
   }
 #endif
 
@@ -414,28 +446,49 @@ Status ShaderHelper::GenerateSourceCode(std::string& code, std::vector<int>& sha
   //
   // Input/output variables
   //
+  size_t binding_index = 0;  // running binding index accounting for segmented buffers
+  // inputs
   for (size_t i = 0; i < input_vars_.size(); ++i) {
     const auto& input = input_vars_[i];
-    ss << "@group(0) @binding(" << i << ") var<storage, read> " << input->name_ << ": array<" << input->StorageType() << ">;\n";
+    uint32_t segments = input->segments_;
+    for (uint32_t seg = 0; seg < segments; ++seg) {
+      ss << "@group(0) @binding(" << binding_index++ << ") var<storage, read> ";
+      if (seg == 0) {
+        ss << input->name_;
+      } else {
+        ss << input->name_ << seg;  // naming convention matches ShaderVariableHelper::Impl usage (name + index)
+      }
+      ss << ": array<" << input->StorageType() << ">;\n";
+    }
   }
+  // outputs
   for (size_t i = 0; i < output_vars_.size(); ++i) {
     const auto& output = output_vars_[i];
     bool is_atomic = program_.Outputs()[i].is_atomic;
-    ss << "@group(0) @binding(" << input_vars_.size() + i << ") var<storage, read_write> " << output->name_ << ": array<";
-    if (is_atomic) {
-      if (output->type_ == ProgramVariableDataType::Float32) {
-        ss << "atomic<i32>";
-      } else if (output->type_ == ProgramVariableDataType::Uint32) {
-        ss << "atomic<u32>";
-      } else if (output->type_ == ProgramVariableDataType::Int32) {
-        ss << "atomic<i32>";
+    uint32_t segments = output->segments_;
+    for (uint32_t seg = 0; seg < segments; ++seg) {
+      ss << "@group(0) @binding(" << binding_index++ << ") var<storage, read_write> ";
+      if (seg == 0) {
+        ss << output->name_;
       } else {
-        ORT_RETURN_IF(true, "Unsupported atomic type: ", int(output->type_));
+        ss << output->name_ << seg;
       }
-    } else {
-      ss << output->StorageType();
+      ss << ": array<";
+      if (is_atomic) {
+        if (output->type_ == ProgramVariableDataType::Float32) {
+          ss << "atomic<i32>";  // emulate float atomic via i32
+        } else if (output->type_ == ProgramVariableDataType::Uint32) {
+          ss << "atomic<u32>";
+        } else if (output->type_ == ProgramVariableDataType::Int32) {
+          ss << "atomic<i32>";
+        } else {
+          ORT_RETURN_IF(true, "Unsupported atomic type: ", int(output->type_));
+        }
+      } else {
+        ss << output->StorageType();
+      }
+      ss << ">;\n";
     }
-    ss << ">;\n";
   }
 
   //
@@ -487,16 +540,29 @@ Status ShaderHelper::GenerateSourceCode(std::string& code, std::vector<int>& sha
         ss << ",";
       }
 
-      auto alignment = (data_type == ProgramUniformVariableDataType::Float16 && length > 4) ? "@align(16) " : "";
-      ss << "\n  " << alignment << name << ": ";
+      // The actual variable type for the uniform variable depends on the data type (T) and length (N).
+      //
+      // For T in [i32, u32, f32]:
+      //   - If N == 1, the type is simply i32, u32, or f32.
+      //   - If 2 < N <= 4, the type is vecN<i32>, vecN<u32>, or vecN<f32> where N is the length.
+      //   - If N > 4, the type is array<vec4<T>, ceil(N / 4)>.
+      //
+      // For T is f16:
+      //   - If N == 1 or N == 2, the type is u32.
+      //   - If 2 < N <= 8, the type is vecX<u32> where X is ceil(N / 2).
+      //   - If N > 8, the type is array<vec4<u32>, X> where X is ceil(N / 8).
+      //
+      // Note: Using f16 type in uniforms is not generally supported on all devices. We use a u32 variable to represent
+      // 2 f16 values.
+
+      if (data_type == ProgramUniformVariableDataType::Float16) {
+        data_type = ProgramUniformVariableDataType::Uint32;  // f16 is represented as u32
+        length = (length + 1) / 2;                           // each u32 can hold 2 f16 values
+      }
+      ss << "\n  " << name << ": ";
       if (length > 4) {
-        if (data_type == ProgramUniformVariableDataType::Float16) {
-          size_t array_size = (length + 7) / 8;
-          ss << "array<mat2x4<" << data_type << ">, " << array_size << ">";
-        } else {
-          size_t array_size = (length + 3) / 4;
-          ss << "array<vec4<" << data_type << ">, " << array_size << ">";
-        }
+        size_t array_size = (length + 3) / 4;
+        ss << "array<vec4<" << data_type << ">, " << array_size << ">";
       } else if (length > 1) {
         ss << "vec" << length << "<" << data_type << ">";
       } else {
@@ -542,7 +608,7 @@ Status ShaderHelper::GenerateSourceCode(std::string& code, std::vector<int>& sha
 
     ss << "\n};\n"
           "@group(0) @binding("
-       << input_vars_.size() + output_vars_.size() << ") var<uniform> uniforms: Uniforms;\n";
+       << binding_index << ") var<uniform> uniforms: Uniforms;\n";
   }
 
   //

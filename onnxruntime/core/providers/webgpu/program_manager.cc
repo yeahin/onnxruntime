@@ -38,6 +38,28 @@ Status ProgramManager::NormalizeDispatchGroupSize(uint32_t& x, uint32_t& y, uint
   return Status::OK();
 }
 
+Status ProgramManager::CalculateSegmentsForInputsAndOutputs(ProgramBase& program) {
+  const uint64_t maxStorageBufferBindingSize = limits_.maxStorageBufferBindingSize;
+
+  // Inputs
+  for (size_t i = 0; i < program.Inputs().size(); ++i) {
+    const auto& input = program.Inputs()[i];
+    if (input.tensor && input.tensor->SizeInBytes() > maxStorageBufferBindingSize) {
+      uint32_t segments = static_cast<uint32_t>((input.tensor->SizeInBytes() + maxStorageBufferBindingSize - 1) / maxStorageBufferBindingSize);
+      program.setSegmentsForInput(i, segments);
+    }
+  }
+  // Outputs
+  for (size_t i = 0; i < program.Outputs().size(); ++i) {
+    const auto& output = program.Outputs()[i];
+    if (output.tensor && output.tensor->SizeInBytes() > maxStorageBufferBindingSize) {
+      uint32_t segments = static_cast<uint32_t>((output.tensor->SizeInBytes() + maxStorageBufferBindingSize - 1) / maxStorageBufferBindingSize);
+      program.setSegmentsForOutput(i, segments);
+    }
+  }
+  return Status::OK();
+}
+
 Status ProgramManager::Build(const ProgramBase& program,
                              const ProgramMetadata& program_metadata,
 #ifndef NDEBUG  // if debug build
@@ -59,6 +81,9 @@ Status ProgramManager::Build(const ProgramBase& program,
 
   ORT_RETURN_IF_ERROR(program.GenerateShaderCode(shader_helper));
 
+  // Finalize inputs after GenerateShaderCode() to ensure indirect buffer is added as the last input
+  shader_helper.FinalizeInputs();
+
   ORT_RETURN_IF_ERROR(shader_helper.ValidateShapeForInputs());
   ORT_RETURN_IF_ERROR(shader_helper.ValidateShapeForOutputs());
   ORT_RETURN_IF_ERROR(shader_helper.ValidateIndices());
@@ -79,11 +104,11 @@ Status ProgramManager::Build(const ProgramBase& program,
 #endif
                         << "] End ===\n";
 
-  wgpu::ShaderModuleWGSLDescriptor wgsl_descriptor{};
-  wgsl_descriptor.code = code.c_str();
+  wgpu::ShaderSourceWGSL wgsl_source{};
+  wgsl_source.code = code.c_str();
 
   wgpu::ShaderModuleDescriptor descriptor{};
-  descriptor.nextInChain = &wgsl_descriptor;
+  descriptor.nextInChain = &wgsl_source;
 
   auto shader_module = device_.CreateShaderModule(&descriptor);
 

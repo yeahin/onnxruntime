@@ -11,6 +11,7 @@
 #include "core/framework/kernel_registry.h"
 #include "core/framework/op_kernel.h"
 #include "core/framework/bfc_arena.h"
+#include "core/framework/ep_context_options.h"
 #include "core/framework/session_state.h"
 #include "core/graph/graph_utils.h"
 #include "core/graph/graph_viewer.h"
@@ -22,8 +23,7 @@
 #include "core/util/thread_utils.h"
 #include "gtest/gtest.h"
 #include "test/test_environment.h"
-#include "test/optimizer/graph_transform_test_builder.h"
-#include "test/util/include/test_environment.h"
+#include "test/unittest_util/graph_transform_test_builder.h"
 #include "test/util/include/default_providers.h"
 #include "test/util/include/file_util.h"
 #include "core/optimizer/layout_transformation/layout_transformation.h"
@@ -275,7 +275,7 @@ TEST_P(SessionStateTestP, TestInitializerProcessing) {
           graph, session_state.GetMutableFuncMgr(),
           [](Graph& graph, bool& modified, const IExecutionProvider& execution_provider,
              const layout_transformation::DebugGraphFn& debug_graph_fn) -> Status {
-            AllocatorPtr cpu_allocator = std::make_shared<CPUAllocator>();
+            AllocatorPtr cpu_allocator = CPUAllocator::DefaultInstance();
             return layout_transformation::TransformLayoutForEP(
                 graph, modified, execution_provider, std::move(cpu_allocator), debug_graph_fn);
           },
@@ -319,7 +319,7 @@ TEST(SessionStateTest, TestInitializerMemoryAllocatedUsingNonArenaMemory) {
     GTEST_SKIP() << "CPU allocator does not support arena usage.";
   }
 
-  AllocatorPtr cpu_allocator = std::make_shared<CPUAllocator>();
+  AllocatorPtr cpu_allocator = CPUAllocator::DefaultInstance();
   // Part 1: Feature turned ON (i.e.) allocate from non-arena memory
   {
     std::basic_ostringstream<ORTCHAR_T> oss;
@@ -504,7 +504,7 @@ void LoadWithResourceAwarePartitioning(const ORTCHAR_T* model_path,
   ASSERT_STATUS_OK(
       partitioner.Partition(graph, session_state.GetMutableFuncMgr(), transform_layout_fn,
                             sess_options.config_options, default_logger, GraphPartitioner::Mode::kNormal,
-                            EpContextModelGenerationOptions{},
+                            epctx::ModelGenOptions{},
                             debug_graph_fn));
 
   verifier_fn(graph);

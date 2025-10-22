@@ -71,16 +71,22 @@ struct OrtShapeInferContext {
     auto num_inputs = ctx_.getNumInputs();
     for (size_t ith_input = 0; ith_input < num_inputs; ++ith_input) {
       const auto* input_type = ctx_.getInputType(ith_input);
-      const auto& value_case = input_type->value_case();
-      ORT_ENFORCE(value_case == ONNX_NAMESPACE::TypeProto::kTensorType,
-                  "shape inference not yet supported for non-tensor types");
-      const auto& shape_proto = input_type->tensor_type().shape();
-      const auto& type_proto = input_type->tensor_type();
-      auto elem_type = ::onnxruntime::utils::CApiElementTypeFromProtoType(type_proto.elem_type());
-      auto tensor_shape = ::onnxruntime::utils::GetTensorShapeFromTensorShapeProto(shape_proto);
-      auto symbolic_dims = GetSymbolicDims(shape_proto);
-      input_type_shapes_.emplace_back(
-          OrtTensorTypeAndShapeInfo::GetTensorShapeAndTypeHelper(elem_type, tensor_shape, &symbolic_dims).release());
+      if (input_type != nullptr) {
+        const auto& value_case = input_type->value_case();
+        ORT_ENFORCE(value_case == ONNX_NAMESPACE::TypeProto::kTensorType,
+                    "shape inference not yet supported for non-tensor types");
+        const auto& shape_proto = input_type->tensor_type().shape();
+        const auto& type_proto = input_type->tensor_type();
+        auto elem_type = ::onnxruntime::utils::CApiElementTypeFromProtoType(type_proto.elem_type());
+        auto tensor_shape = ::onnxruntime::utils::GetTensorShapeFromTensorShapeProto(shape_proto);
+        auto symbolic_dims = GetSymbolicDims(shape_proto);
+        input_type_shapes_.emplace_back(
+            OrtTensorTypeAndShapeInfo::GetTensorShapeAndTypeHelper(elem_type, &tensor_shape, &symbolic_dims));
+      } else {
+        input_type_shapes_.emplace_back(
+            OrtTensorTypeAndShapeInfo::GetTensorShapeAndTypeHelper(
+                ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED, nullptr, nullptr));
+      }
     }
   }
 
@@ -94,19 +100,21 @@ struct OrtShapeInferContext {
   onnxruntime::Status SetOutputTypeShape(size_t index, const OrtTensorTypeAndShapeInfo* info) const {
     ORT_RETURN_IF_NOT(info, "Invalid shape info");
     ONNX_NAMESPACE::TensorShapeProto shape_proto;
-    const auto& symbolic_dims = info->dim_params;
-    const auto& integer_dims = info->shape.GetDims();
-    ORT_RETURN_IF_NOT(symbolic_dims.size() == integer_dims.size(), "symbolic and integer dims mismatch!");
-    for (size_t ith = 0; ith < symbolic_dims.size(); ith++) {
-      auto* dim_proto = shape_proto.add_dim();
-      if (symbolic_dims[ith].size() > 0) {
-        dim_proto->set_dim_param(symbolic_dims[ith]);
-      } else {
-        dim_proto->set_dim_value(integer_dims[ith]);
+    if (info->HasShape()) {
+      const auto& symbolic_dims = *info->GetDimParams();
+      const auto integer_dims = info->GetShape()->GetDims();
+      ORT_RETURN_IF_NOT(symbolic_dims.size() == integer_dims.size(), "symbolic and integer dims mismatch!");
+      for (size_t ith = 0, end = symbolic_dims.size(); ith < end; ith++) {
+        auto* dim_proto = shape_proto.add_dim();
+        if (symbolic_dims[ith].size() > 0) {
+          dim_proto->set_dim_param(symbolic_dims[ith]);
+        } else {
+          dim_proto->set_dim_value(integer_dims[ith]);
+        }
       }
     }
     ONNX_NAMESPACE::updateOutputShape(ctx_, index, shape_proto);
-    ONNX_NAMESPACE::updateOutputElemType(ctx_, index, info->type);
+    ONNX_NAMESPACE::updateOutputElemType(ctx_, index, info->GetElementType());
     return onnxruntime::Status::OK();
   }
 
@@ -436,17 +444,14 @@ ORT_API_STATUS_IMPL(OrtApis::ReadOpAttr, _In_ const OrtOpAttr* op_attr, _In_ Ort
       }
       case OrtOpAttrType::ORT_OP_ATTR_STRING: {
         const auto& s = attr->s();
-        if (len < s.size() + 1) {
+        if (len < s.size()) {
           ret = OrtApis::CreateStatus(OrtErrorCode::ORT_INVALID_ARGUMENT,
                                       "Size of data not large enough to hold the string.");
         } else {
           char* output_c = reinterpret_cast<char*>(data);
-          for (char c : s) {
-            *output_c++ = c;
-          }
-          *output_c = '\0';
+          memcpy(output_c, s.data(), s.size());
         }
-        *out = s.size() + 1;
+        *out = s.size();
         break;
       }
       case OrtOpAttrType::ORT_OP_ATTR_STRINGS: {
@@ -583,21 +588,19 @@ ORT_API_STATUS_IMPL(OrtApis::KernelInfoGetAttribute_tensor, _In_ const OrtKernel
     onnxruntime::TensorShape tensor_shape = onnxruntime::utils::GetTensorShapeFromTensorProto(tensor_proto);
     const auto* type = onnxruntime::DataTypeImpl::TensorTypeFromONNXEnum(tensor_proto.data_type())->GetElementType();
     onnxruntime::AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
-    auto tensorp = std::make_unique<onnxruntime::Tensor>(type, tensor_shape, std::move(alloc_ptr));
+    auto tensor = onnxruntime::Tensor{type, tensor_shape, std::move(alloc_ptr)};
 
     // Deserialize TensorProto into pre-allocated, empty Tensor.
     // TODO: here the TensorProto loses model path information, so it cannot be an external tensor.
     status = onnxruntime::utils::TensorProtoToTensor(onnxruntime::Env::Default(), std::filesystem::path(),
-                                                     tensor_proto, *tensorp);
+                                                     tensor_proto, tensor);
     if (!status.IsOK()) {
       return onnxruntime::ToOrtStatus(status);
     }
 
     // Initialize OrtValue from Tensor.
-    auto ml_tensor = onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>();
     auto value = std::make_unique<OrtValue>();
-    value->Init(tensorp.release(), ml_tensor, ml_tensor->GetDeleteFunc());
-
+    onnxruntime::Tensor::InitOrtValue(std::move(tensor), *value);
     *out = value.release();
     return nullptr;
   });
@@ -762,7 +765,7 @@ ORT_API_STATUS_IMPL(OrtApis::KernelContext_GetScratchBuffer, _In_ const OrtKerne
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "No requested allocator available");
   }
   onnxruntime::Stream* stream = reinterpret_cast<const onnxruntime::OpKernelContext*>(context)->GetComputeStream();
-  *out = AllocateBufferWithOptions(*allocator, count_or_bytes, false, stream, stream->GetWaitNotificationFn());
+  *out = AllocateBufferWithOptions(*allocator, count_or_bytes, false, stream);
   return nullptr;
 };
 
@@ -797,8 +800,7 @@ struct CustomOpKernel : OpKernel {
   Status Compute(OpKernelContext* ctx) const override {
     if (op_.version >= min_ort_version_with_compute_v2_support &&
         op_.KernelComputeV2) {
-      auto status_ptr = op_.KernelComputeV2(op_kernel_, reinterpret_cast<OrtKernelContext*>(ctx));
-      return ToStatus(status_ptr);
+      return ToStatusAndRelease(op_.KernelComputeV2(op_kernel_, reinterpret_cast<OrtKernelContext*>(ctx)));
     } else {
       op_.KernelCompute(op_kernel_, reinterpret_cast<OrtKernelContext*>(ctx));
       return Status::OK();

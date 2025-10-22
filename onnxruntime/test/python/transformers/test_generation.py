@@ -8,6 +8,7 @@
 import os
 import shutil
 import unittest
+from importlib.util import find_spec
 
 import onnx
 import pytest
@@ -20,12 +21,16 @@ if find_transformers_source() and find_transformers_source(["models", "t5"]):
     from benchmark_helper import Precision
     from convert_generation import main as run
     from models.t5.convert_to_onnx import export_onnx_models as export_t5_onnx_models
-    from models.whisper.convert_to_onnx import main as run_whisper
+
+    if not find_spec("onnxruntime.training"):
+        from models.whisper.convert_to_onnx import main as run_whisper
 else:
     from onnxruntime.transformers.benchmark_helper import Precision
     from onnxruntime.transformers.convert_generation import main as run
     from onnxruntime.transformers.models.t5.convert_to_onnx import export_onnx_models as export_t5_onnx_models
-    from onnxruntime.transformers.models.whisper.convert_to_onnx import main as run_whisper
+
+    if not find_spec("onnxruntime.training"):
+        from onnxruntime.transformers.models.whisper.convert_to_onnx import main as run_whisper
 
 
 def has_cuda_environment():
@@ -366,7 +371,7 @@ class TestBeamSearchT5Fp16(unittest.TestCase):
         onnx_path = os.path.join(".", "onnx_models", f"{model_name}_encoder_fp16.onnx")
 
         model = onnx.load_model(onnx_path, format=None, load_external_data=True)
-        from onnxruntime.transformers.onnx_model import OnnxModel
+        from onnxruntime.transformers.onnx_model import OnnxModel  # noqa: PLC0415
 
         onnx_model = OnnxModel(model)
         op_counters = onnx_model.get_operator_statistics()
@@ -386,7 +391,7 @@ class TestBeamSearchT5Fp16(unittest.TestCase):
         onnx_path = os.path.join(".", "onnx_models", f"{model_name}_decoder_fp16.onnx")
 
         model = onnx.load_model(onnx_path, format=None, load_external_data=True)
-        from onnxruntime.transformers.onnx_model import OnnxModel
+        from onnxruntime.transformers.onnx_model import OnnxModel  # noqa: PLC0415
 
         onnx_model = OnnxModel(model)
         op_counters = onnx_model.get_operator_statistics()
@@ -464,7 +469,7 @@ class TestBeamSearchWhisper(unittest.TestCase):
         self.int8_cpu_arguments = [
             "--precision",
             "int8",
-            "--quantize_embedding_layer",
+            "--quantize_symmetric",
         ]
 
     def tearDown(self):
@@ -509,21 +514,33 @@ class TestBeamSearchWhisper(unittest.TestCase):
         if "--model_impl" not in arguments:
             self.run_export(arguments)
 
+    @unittest.skipIf(
+        find_spec("onnxruntime.training"), "Skip because training package doesn't has quantize_matmul_2bits"
+    )
     @pytest.mark.slow
     def test_required_args(self):
         optional_args = []
         self.run_configs(optional_args)
 
+    @unittest.skipIf(
+        find_spec("onnxruntime.training"), "Skip because training package doesn't has quantize_matmul_2bits"
+    )
     @pytest.mark.slow
     def test_forced_decoder_ids(self):
         decoder_input_ids = ["--use_forced_decoder_ids"]
         self.run_configs(decoder_input_ids)
 
+    @unittest.skipIf(
+        find_spec("onnxruntime.training"), "Skip because training package doesn't has quantize_matmul_2bits"
+    )
     @pytest.mark.slow
     def test_logits_processor(self):
         logits_processor = ["--use_logits_processor"]
         self.run_configs(logits_processor)
 
+    @unittest.skipIf(
+        find_spec("onnxruntime.training"), "Skip because training package doesn't has quantize_matmul_2bits"
+    )
     @pytest.mark.slow
     def test_cross_qk_overall(self):
         cross_qk_input_args = [
@@ -540,6 +557,9 @@ class TestBeamSearchWhisper(unittest.TestCase):
         ]
         self.run_configs(cross_qk_input_args + cross_qk_output_args)
 
+    @unittest.skipIf(
+        find_spec("onnxruntime.training"), "Skip because training package doesn't has quantize_matmul_2bits"
+    )
     @pytest.mark.slow
     def test_openai_impl_whisper(self):
         optional_args = ["--model_impl", "openai"]

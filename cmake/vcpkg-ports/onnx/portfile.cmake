@@ -3,8 +3,8 @@ vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO onnx/onnx
-    REF 7fc2b81a275223f5b02a522d9d2649837542a7be
-    SHA512 6911b4e532a7735ef40660dee904877850234a600b39d46a8dab91f6506c6547e3bd10af5d5f0f0abc0c6e7e6e1fc04c0ea307eb9f4aef5c614eaaa50403804d
+    REF "v${VERSION}"
+    SHA512 cf6ff4c0bb6cc16ce5f4d6267480d35f3c7a5fde94d10e1358928ff6e4ec6d756a7c5d34a500e60bbd8eb1912c8af21aa763719321b330f56a0eb6b9b810ef60
     PATCHES
         fix-cmakelists.patch
         fix-dependency-protobuf.patch

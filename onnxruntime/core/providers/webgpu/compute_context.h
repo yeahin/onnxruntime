@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "core/framework/execution_provider.h"
+#include "core/providers/webgpu/webgpu_execution_provider.h"
 
 #include "core/providers/webgpu/program.h"
 #include "core/providers/webgpu/webgpu_context.h"
@@ -20,10 +21,11 @@ class Tensor;
 namespace webgpu {
 
 class WebGpuContext;
+class BufferManager;
 
 class ComputeContext {
  public:
-  ComputeContext(OpKernelContext& kernel_context);
+  ComputeContext(OpKernelContext& kernel_context, const WebGpuExecutionProvider& ep);
 
   virtual ~ComputeContext() = default;
 
@@ -40,6 +42,14 @@ class ComputeContext {
   inline bool HasFeature(wgpu::FeatureName feature) const {
     return webgpu_context_.DeviceHasFeature(feature);
   }
+  inline bool IsGraphCaptureEnabled() const {
+    return ep_.IsGraphCaptureEnabled();
+  }
+#if !defined(__wasm__)
+  inline const wgpu::AdapterPropertiesSubgroupMatrixConfigs& SubgroupMatrixConfigs() const {
+    return webgpu_context_.SubgroupMatrixConfigs();
+  }
+#endif
 
   //
   // Get the kernel context.
@@ -110,13 +120,17 @@ class ComputeContext {
     ORT_THROW_IF_ERROR(kernel_context_.GetTempSpaceAllocator(&allocator));
     return {data_type, std::forward<TensorShapeType>(shape), allocator};
   }
-
   //
   // Run a compute shader program.
   //
-  inline Status RunProgram(const ProgramBase& program) {
+  inline Status RunProgram(ProgramBase& program) {
     return webgpu_context_.Run(*this, program);
   }
+
+  //
+  // Get the buffer manager from the GPU allocator.
+  //
+  const webgpu::BufferManager& BufferManager() const;
 
   //
   // Push error scope.
@@ -135,6 +149,7 @@ class ComputeContext {
  protected:
   WebGpuContext& webgpu_context_;
   OpKernelContext& kernel_context_;
+  const WebGpuExecutionProvider& ep_;
 };
 
 }  // namespace webgpu

@@ -38,6 +38,8 @@ struct TensorrtExecutionProviderInfo {
   std::string onnx_model_folder_path{""};
   const void* onnx_bytestream{nullptr};
   size_t onnx_bytestream_size{0};
+  const void* external_data_bytestream{nullptr};
+  size_t external_data_bytestream_size{0};
   bool engine_decryption_enable{false};
   std::string engine_decryption_lib_path{""};
   bool force_sequential_engine_build{false};
@@ -64,6 +66,7 @@ struct TensorrtExecutionProviderInfo {
   bool engine_hw_compatible{false};
   std::string op_types_to_exclude{""};
   std::string preview_features{""};
+  bool load_user_initializer{false};
 
   bool cublas_disable{ false };
   bool cudnn_disable{ false };
